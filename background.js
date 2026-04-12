@@ -2,6 +2,7 @@ importScripts('utils.js');
 
 const TAB_READY_DELAY_MS = 200;
 const OFFSCREEN_READY_TIMEOUT_MS = 5000;
+const NATIVE_HOST_NAME = 'com.telemost.transcriber';
 
 let creatingOffscreen = null;
 
@@ -92,6 +93,58 @@ chrome.action.onClicked.addListener(async (tab) => {
   }, TAB_READY_DELAY_MS);
 });
 
+function handleAskAI(message) {
+  const question = message.question;
+  console.log('[TT:AI] Sending question to native host');
+  chrome.runtime.sendNativeMessage(
+    NATIVE_HOST_NAME,
+    { type: 'ask', question: question },
+    (response) => {
+      if (chrome.runtime.lastError) {
+        console.log('[TT:AI] Native host error:', chrome.runtime.lastError.message);
+        broadcastToSidePanel({
+          type: 'ai-error',
+          error: chrome.runtime.lastError.message
+        });
+        return;
+      }
+      if (response && response.type === 'error') {
+        console.log('[TT:AI] Claude error:', response.error);
+        broadcastToSidePanel({ type: 'ai-error', error: response.error });
+      } else if (response && response.type === 'answer') {
+        console.log('[TT:AI] Got answer from Claude');
+        broadcastToSidePanel({ type: 'ai-response', text: response.text });
+      } else {
+        broadcastToSidePanel({ type: 'ai-error', error: 'Unexpected response from native host' });
+      }
+    }
+  );
+}
+
+function handlePingNative() {
+  console.log('[TT:AI] Pinging native host');
+  chrome.runtime.sendNativeMessage(
+    NATIVE_HOST_NAME,
+    { type: 'ping' },
+    (response) => {
+      if (chrome.runtime.lastError) {
+        console.log('[TT:AI] Ping failed:', chrome.runtime.lastError.message);
+        broadcastToSidePanel({
+          type: 'native-error',
+          error: chrome.runtime.lastError.message
+        });
+        return;
+      }
+      if (response && response.type === 'pong') {
+        console.log('[TT:AI] Pong received');
+        broadcastToSidePanel({ type: 'native-pong' });
+      } else {
+        broadcastToSidePanel({ type: 'native-error', error: 'Invalid ping response' });
+      }
+    }
+  );
+}
+
 // Message type → handler dispatch map
 const MESSAGE_HANDLERS = {
   'start-capture': (message, sender, sendResponse) => {
@@ -127,6 +180,16 @@ const MESSAGE_HANDLERS = {
 
   'capture-warning': (message) => {
     broadcastToSidePanel(message);
+  },
+
+  'ask-ai': (message, sender, sendResponse) => {
+    handleAskAI(message);
+    sendResponse({ success: true });
+  },
+
+  'ping-native': (message, sender, sendResponse) => {
+    handlePingNative();
+    sendResponse({ success: true });
   }
 };
 
