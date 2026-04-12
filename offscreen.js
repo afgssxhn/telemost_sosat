@@ -7,6 +7,8 @@ let audioPlayback = null;
 let websocket = null;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 3;
+const SAMPLE_RATE = 16000;
+const RECONNECT_BACKOFF_BASE_MS = 1000;
 let currentApiKey = null;
 let isRunning = false;
 
@@ -57,7 +59,7 @@ async function startCapture(streamId, apiKey) {
       }).catch(() => {});
     }
 
-    audioContext = new AudioContext({ sampleRate: 16000 });
+    audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
     const source = audioContext.createMediaStreamSource(mediaStream);
 
     await audioContext.audioWorklet.addModule('audio-processor.js');
@@ -92,7 +94,7 @@ function connectWebSocket() {
     + '&punctuate=true'
     + '&interim_results=true'
     + '&encoding=linear16'
-    + '&sample_rate=16000'
+    + '&sample_rate=' + SAMPLE_RATE
     + '&channels=1';
 
   websocket = new WebSocket(url, ['token', currentApiKey]);
@@ -129,7 +131,7 @@ function connectWebSocket() {
 
     if (isRunning && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
       reconnectAttempts++;
-      const delay = Math.pow(2, reconnectAttempts) * 1000;
+      const delay = Math.pow(2, reconnectAttempts) * RECONNECT_BACKOFF_BASE_MS;
       if (DEBUG) console.log('Reconnecting in', delay, 'ms, attempt', reconnectAttempts);
       setTimeout(() => connectWebSocket(), delay);
     } else if (isRunning && reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {

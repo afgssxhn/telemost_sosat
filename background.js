@@ -1,5 +1,8 @@
 const DEBUG = false;
 
+const TAB_READY_DELAY_MS = 200;
+const OFFSCREEN_READY_TIMEOUT_MS = 5000;
+
 let creatingOffscreen = null;
 
 async function getState() {
@@ -86,7 +89,7 @@ chrome.action.onClicked.addListener(async (tab) => {
       tabTitle: state.pendingTabTitle,
       error: state.pendingStreamId ? null : 'Failed to prepare tab capture. Try clicking the icon again.'
     });
-  }, 200);
+  }, TAB_READY_DELAY_MS);
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -215,7 +218,7 @@ async function ensureOffscreenDocument() {
       const timeout = setTimeout(() => {
         chrome.runtime.onMessage.removeListener(listener);
         reject(new Error('Offscreen document did not initialize within 5s'));
-      }, 5000);
+      }, OFFSCREEN_READY_TIMEOUT_MS);
 
       function listener(message) {
         if (message.type === 'offscreen-ready') {

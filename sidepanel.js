@@ -9,6 +9,9 @@ const transcriptArea = document.getElementById('transcript-area');
 const statusEl = document.getElementById('status');
 const placeholder = document.getElementById('placeholder');
 
+const MAX_TAB_NAME_LENGTH = 50;
+const COPIED_FEEDBACK_MS = 1500;
+const WARNING_DISPLAY_MS = 5000;
 const PLACEHOLDER_TEXT = 'Click the extension icon on a tab with audio, then press "Start"';
 
 let isRecording = false;
@@ -64,7 +67,7 @@ chrome.runtime.onMessage.addListener((message) => {
     setStatus('recording', message.warning);
     setTimeout(() => {
       if (isRecording) setStatus('recording', 'Recording...');
-    }, 5000);
+    }, WARNING_DISPLAY_MS);
   }
 
   if (message.type === 'tab-ready') {
@@ -97,7 +100,7 @@ async function initStatus() {
 }
 
 function setTabReady(title) {
-  const display = title.length > 50 ? title.substring(0, 50) + '...' : title;
+  const display = title.length > MAX_TAB_NAME_LENGTH ? title.substring(0, MAX_TAB_NAME_LENGTH) + '...' : title;
   tabNameEl.textContent = display;
   tabNameEl.classList.remove('error');
   tabNameEl.classList.add('ready');
@@ -223,7 +226,7 @@ function copyToClipboard(text, btn) {
     setTimeout(() => {
       btn.textContent = original;
       btn.classList.remove('copied');
-    }, 1500);
+    }, COPIED_FEEDBACK_MS);
   });
 }
 

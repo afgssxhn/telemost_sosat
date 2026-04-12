@@ -1,5 +1,7 @@
 const DEBUG = false;
 
+const MESSAGE_DISPLAY_MS = 2000;
+
 const apiKeyInput = document.getElementById('api-key');
 const btnSave = document.getElementById('btn-save');
 const messageEl = document.getElementById('message');
@@ -30,5 +32,5 @@ function showMessage(text, type) {
   setTimeout(() => {
     messageEl.textContent = '';
     messageEl.className = 'message';
-  }, 2000);
+  }, MESSAGE_DISPLAY_MS);
 }
