@@ -1,4 +1,4 @@
-const DEBUG = false;
+importScripts('utils.js');
 
 const TAB_READY_DELAY_MS = 200;
 const OFFSCREEN_READY_TIMEOUT_MS = 5000;
@@ -271,9 +271,4 @@ async function closeOffscreenDocument() {
 
 function broadcastToSidePanel(message) {
   chrome.runtime.sendMessage({ ...message, target: 'sidepanel' }).catch(() => {});
-}
-
-async function getApiKey() {
-  const result = await chrome.storage.local.get('deepgramApiKey');
-  return result.deepgramApiKey || null;
 }

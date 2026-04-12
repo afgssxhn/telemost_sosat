@@ -1,5 +1,3 @@
-const DEBUG = false;
-
 const MESSAGE_DISPLAY_MS = 2000;
 
 const apiKeyInput = document.getElementById('api-key');

@@ -1,5 +1,3 @@
-const DEBUG = false;
-
 const btnToggle = document.getElementById('btn-toggle');
 const btnCopyAll = document.getElementById('btn-copy-all');
 const btnCopyLast = document.getElementById('btn-copy-last');
@@ -239,11 +237,6 @@ function showNoApiKey() {
   });
 
   setStatus('error', 'No API key');
-}
-
-async function getApiKey() {
-  const result = await chrome.storage.local.get('deepgramApiKey');
-  return result.deepgramApiKey || null;
 }
 
 updateCopyButtons();

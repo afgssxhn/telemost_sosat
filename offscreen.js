@@ -1,5 +1,3 @@
-const DEBUG = false;
-
 let audioContext = null;
 let mediaStream = null;
 let workletNode = null;
