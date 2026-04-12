@@ -92,22 +92,21 @@ chrome.action.onClicked.addListener(async (tab) => {
   }, TAB_READY_DELAY_MS);
 });
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'start-capture') {
+// Message type → handler dispatch map
+const MESSAGE_HANDLERS = {
+  'start-capture': (message, sender, sendResponse) => {
     handleStartCapture().then(sendResponse).catch((err) => {
       sendResponse({ success: false, error: err.message });
     });
-    return true;
-  }
+  },
 
-  if (message.type === 'stop-capture') {
+  'stop-capture': (message, sender, sendResponse) => {
     handleStopCapture().then(sendResponse).catch((err) => {
       sendResponse({ success: false, error: err.message });
     });
-    return true;
-  }
+  },
 
-  if (message.type === 'get-status') {
+  'get-status': (message, sender, sendResponse) => {
     getState().then((state) => {
       sendResponse({
         isCapturing: state.isCapturing,
@@ -115,20 +114,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         hasStream: !!state.pendingStreamId
       });
     });
-    return true;
-  }
+  },
 
-  if (message.type === 'transcript') {
+  'transcript': (message) => {
     broadcastToSidePanel(message);
-  }
+  },
 
-  if (message.type === 'capture-error') {
+  'capture-error': (message) => {
     broadcastToSidePanel(message);
     setState({ isCapturing: false });
-  }
+  },
 
-  if (message.type === 'capture-warning') {
+  'capture-warning': (message) => {
     broadcastToSidePanel(message);
+  }
+};
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const handler = MESSAGE_HANDLERS[message.type];
+  if (handler) {
+    handler(message, sender, sendResponse);
+    return true;
   }
 });
 
