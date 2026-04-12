@@ -7,7 +7,9 @@ Chrome extension (Manifest V3) for real-time Russian speech transcription from b
 - `background.js` — Service worker. State persisted in `chrome.storage.session` via `getState()`/`setState()` helpers. Coordinates offscreen doc and side panel.
 - `offscreen.js` — Captures tab audio (AudioWorklet + WebSocket to Deepgram). Sends `offscreen-ready` on load. All outgoing messages include `target: 'background'`.
 - `sidepanel.js` — UI. Filters messages by `target: 'sidepanel'`.
-- `audio-processor.js` — AudioWorklet for Float32 -> PCM Int16 conversion.
+- `audio-processor.js` — AudioWorklet: ring buffer on Float32Array with read/write pointers for Float32 -> PCM Int16 conversion.
+- `utils.js` — Shared utilities (`DEBUG` flag, `getApiKey()`). Loaded via `importScripts` in background.js, `<script>` in HTML pages.
+- `common.css` — Shared CSS reset, body theme, `.btn` base styles. Linked before page-specific CSS.
 
 ## Key Patterns
 
@@ -16,6 +18,8 @@ Chrome extension (Manifest V3) for real-time Russian speech transcription from b
 - **No offscreenCreated flag:** Always check `chrome.runtime.getContexts()` for real presence.
 - **Message targeting:** All inter-context messages carry a `target` field (`'sidepanel'`, `'offscreen'`, `'background'`). Each listener filters by target.
 - **Tab navigation handling:** `chrome.tabs.onUpdated` invalidates stale `streamId` and stops capture on navigation.
+- **Message dispatch map:** `background.js` uses `MESSAGE_HANDLERS` object for type→handler lookup instead of if-chain. Always returns `true` for async sendResponse.
+- **Named constants:** Magic numbers extracted to `UPPER_SNAKE_CASE` constants at top of each file.
 
 ## Bug Fixes Applied (2026-04-13)
 
@@ -28,3 +32,11 @@ Chrome extension (Manifest V3) for real-time Russian speech transcription from b
 7. Message targeting prevents cross-context delivery + fixes hidden transcript duplication
 8. Interim element cleaned up on recording stop
 9. Transcript copy trims whitespace to prevent double spaces
+
+## Refactoring Applied (2026-04-13)
+
+1. `audio-processor.js`: Ring buffer (Float32Array + read/write pointers) replaces Array+push+splice — eliminates GC pressure in real-time audio thread
+2. Magic numbers extracted to named constants across all JS files
+3. `background.js`: Message handler if-chain replaced with `MESSAGE_HANDLERS` dispatch map
+4. `utils.js` created: shared `DEBUG` flag and `getApiKey()` extracted from background.js, sidepanel.js, offscreen.js, options.js
+5. `common.css` created: shared reset, body theme, `.btn` base styles extracted from sidepanel.css and options.css
