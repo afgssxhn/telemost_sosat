@@ -11,6 +11,8 @@ let currentApiKey = null;
 let isRunning = false;
 
 chrome.runtime.onMessage.addListener((message) => {
+  if (message.target && message.target !== 'offscreen') return;
+
   if (message.type === 'offscreen-start') {
     startCapture(message.streamId, message.apiKey);
   }
@@ -21,7 +23,7 @@ chrome.runtime.onMessage.addListener((message) => {
 });
 
 // Signal to background that the offscreen document is loaded and ready
-chrome.runtime.sendMessage({ type: 'offscreen-ready' }).catch(() => {});
+chrome.runtime.sendMessage({ type: 'offscreen-ready', target: 'background' }).catch(() => {});
 console.log('[TT] Offscreen document ready');
 
 async function startCapture(streamId, apiKey) {
@@ -50,6 +52,7 @@ async function startCapture(streamId, apiKey) {
       console.log('[TT] Audio playback failed:', e.message);
       chrome.runtime.sendMessage({
         type: 'capture-warning',
+        target: 'background',
         warning: 'Tab audio playback failed. Transcription continues without audio.'
       }).catch(() => {});
     }
@@ -73,6 +76,7 @@ async function startCapture(streamId, apiKey) {
     if (DEBUG) console.log('Capture error:', err);
     chrome.runtime.sendMessage({
       type: 'capture-error',
+      target: 'background',
       error: err.message
     });
     stopCapture();
@@ -106,6 +110,7 @@ function connectWebSocket() {
       if (transcript) {
         chrome.runtime.sendMessage({
           type: 'transcript',
+          target: 'background',
           text: transcript,
           isFinal: data.is_final === true
         });
@@ -130,6 +135,7 @@ function connectWebSocket() {
     } else if (isRunning && reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
       chrome.runtime.sendMessage({
         type: 'capture-error',
+        target: 'background',
         error: 'WebSocket connection lost after ' + MAX_RECONNECT_ATTEMPTS + ' reconnect attempts'
       });
     }

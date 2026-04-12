@@ -47,6 +47,8 @@ btnClear.addEventListener('click', () => {
 });
 
 chrome.runtime.onMessage.addListener((message) => {
+  if (message.target && message.target !== 'sidepanel') return;
+
   if (message.type === 'transcript') {
     handleTranscript(message.text, message.isFinal);
   }

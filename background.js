@@ -123,6 +123,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     broadcastToSidePanel(message);
     setState({ isCapturing: false });
   }
+
+  if (message.type === 'capture-warning') {
+    broadcastToSidePanel(message);
+  }
 });
 
 async function handleStartCapture() {
@@ -145,6 +149,7 @@ async function handleStartCapture() {
 
   chrome.runtime.sendMessage({
     type: 'offscreen-start',
+    target: 'offscreen',
     streamId: state.pendingStreamId,
     apiKey: apiKey
   });
@@ -162,7 +167,7 @@ async function handleStopCapture() {
   }
 
   try {
-    chrome.runtime.sendMessage({ type: 'offscreen-stop' });
+    chrome.runtime.sendMessage({ type: 'offscreen-stop', target: 'offscreen' });
   } catch (e) {
     console.log('[TT] Error sending stop to offscreen:', e.message);
   }
@@ -256,7 +261,7 @@ async function closeOffscreenDocument() {
 }
 
 function broadcastToSidePanel(message) {
-  chrome.runtime.sendMessage(message).catch(() => {});
+  chrome.runtime.sendMessage({ ...message, target: 'sidepanel' }).catch(() => {});
 }
 
 async function getApiKey() {
