@@ -14,6 +14,7 @@ import sys
 LOG_PREFIX = '[TT:HOST]'
 CONTEXT_FILE = 'context.md'
 CLAUDE_TIMEOUT_S = 120
+DEFAULT_MODEL = 'claude-sonnet-4-20250514'
 
 # Windows requires binary mode on stdin/stdout for the NM protocol
 if os.name == 'nt':
@@ -29,7 +30,7 @@ def log(msg):
 
 
 def read_message():
-    """Read a Chrome Native Messaging message from stdin."""
+    """Read a Chrome Native Messaging message from stdin (binary)."""
     raw_length = sys.stdin.buffer.read(4)
     if not raw_length or len(raw_length) < 4:
         return None
@@ -39,7 +40,7 @@ def read_message():
 
 
 def write_message(obj):
-    """Write a Chrome Native Messaging message to stdout."""
+    """Write a Chrome Native Messaging message to stdout (binary UTF-8)."""
     data = json.dumps(obj, ensure_ascii=False).encode('utf-8')
     sys.stdout.buffer.write(struct.pack('<I', len(data)))
     sys.stdout.buffer.write(data)
@@ -70,20 +71,28 @@ def handle_ask(msg):
     if not question:
         return {'type': 'error', 'error': 'Empty question'}
 
+    model = msg.get('model', DEFAULT_MODEL)
     context = load_context()
     if context:
         prompt = f'Context:\n{context}\n\nQuestion:\n{question}'
     else:
         prompt = question
 
-    log(f'Asking Claude: {question[:80]}...')
+    log(f'Asking Claude (model={model}): {question[:80]}...')
+
+    # Force UTF-8 for subprocess to avoid cp1251/cp866 garbling on Windows
+    env = os.environ.copy()
+    env['PYTHONIOENCODING'] = 'utf-8'
 
     try:
         result = subprocess.run(
-            ['claude', '-p', prompt],
+            ['claude', '-p', '--model', model, prompt],
             capture_output=True,
             text=True,
-            timeout=CLAUDE_TIMEOUT_S
+            encoding='utf-8',
+            errors='replace',
+            timeout=CLAUDE_TIMEOUT_S,
+            env=env
         )
         if result.returncode != 0:
             error_text = result.stderr.strip() or f'Claude exited with code {result.returncode}'
