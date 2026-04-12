@@ -56,4 +56,6 @@ Chrome extension (Manifest V3) for real-time Russian speech transcription from b
 - AI button in controls row: sends all accumulated transcripts to Claude, shows answer inline below transcript area
 - Clear button also clears AI answer
 - Install scripts: `install.sh` (Linux/macOS), `install.bat` (Windows) — register NM host with Chrome
+- Model selection: options page stores `claudeModel` in `chrome.storage.local`, sidepanel reads it and passes via `ask-ai` → background → host.py `--model` flag. Default: `claude-sonnet-4-20250514`
+- Windows UTF-8 fix: `subprocess.run()` in host.py uses explicit `encoding='utf-8'`, `errors='replace'`, and `PYTHONIOENCODING=utf-8` env var to prevent cp1251/cp866 garbling
 - Logging prefix: `[TT:AI]` for AI operations, `[TT:HOST]` for native host
