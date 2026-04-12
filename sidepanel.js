@@ -131,6 +131,11 @@ async function startRecording() {
 }
 
 async function stopRecording() {
+  if (interimEl) {
+    interimEl.remove();
+    interimEl = null;
+  }
+
   const response = await chrome.runtime.sendMessage({ type: 'stop-capture' });
   isRecording = false;
 
