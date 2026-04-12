@@ -1,13 +1,4 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #1e1e1e;
-  color: #e0e0e0;
   display: flex;
   justify-content: center;
   padding: 40px 20px;
@@ -77,11 +68,8 @@ input:focus {
   padding: 10px 24px;
   background: #4a9eff;
   color: #fff;
-  border: none;
-  border-radius: 6px;
   font-size: 14px;
   font-weight: 600;
-  cursor: pointer;
   transition: background 0.2s;
 }
 
