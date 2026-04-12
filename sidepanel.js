@@ -9,6 +9,8 @@ const transcriptArea = document.getElementById('transcript-area');
 const statusEl = document.getElementById('status');
 const placeholder = document.getElementById('placeholder');
 
+const PLACEHOLDER_TEXT = 'Click the extension icon on a tab with audio, then press "Start"';
+
 let isRecording = false;
 let finalTranscripts = [];
 let interimEl = null;
@@ -35,7 +37,10 @@ btnCopyLast.addEventListener('click', () => {
 
 btnClear.addEventListener('click', () => {
   finalTranscripts = [];
-  transcriptArea.innerHTML = '';
+  while (transcriptArea.firstChild) {
+    transcriptArea.removeChild(transcriptArea.firstChild);
+  }
+  placeholder.textContent = PLACEHOLDER_TEXT;
   placeholder.style.display = 'block';
   transcriptArea.appendChild(placeholder);
   updateCopyButtons();
