@@ -18,6 +18,31 @@ async function setState(patch) {
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
 
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
+  if (changeInfo.status !== 'loading') return;
+
+  const state = await getState();
+  if (tabId !== state.pendingTabId) return;
+
+  console.log('[TT] Tracked tab navigating, invalidating streamId');
+
+  if (state.isCapturing) {
+    await handleStopCapture();
+    broadcastToSidePanel({
+      type: 'capture-error',
+      error: 'Recording stopped: tab navigated. Click icon again to re-capture.'
+    });
+  }
+
+  await setState({ pendingStreamId: null });
+
+  broadcastToSidePanel({
+    type: 'tab-ready',
+    tabTitle: null,
+    error: 'Tab navigated. Click the extension icon again.'
+  });
+});
+
 chrome.action.onClicked.addListener(async (tab) => {
   if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://'))) {
     await chrome.sidePanel.open({ tabId: tab.id });
