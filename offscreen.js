@@ -3,6 +3,7 @@ const DEBUG = false;
 let audioContext = null;
 let mediaStream = null;
 let workletNode = null;
+let audioPlayback = null;
 let websocket = null;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 3;
@@ -35,6 +36,11 @@ async function startCapture(streamId, apiKey) {
       }
     });
 
+    // Play captured audio back so the user still hears the tab
+    audioPlayback = new Audio();
+    audioPlayback.srcObject = mediaStream;
+    audioPlayback.play();
+
     audioContext = new AudioContext({ sampleRate: 16000 });
     const source = audioContext.createMediaStreamSource(mediaStream);
 
@@ -48,7 +54,6 @@ async function startCapture(streamId, apiKey) {
     };
 
     source.connect(workletNode);
-    workletNode.connect(audioContext.destination);
 
     connectWebSocket();
   } catch (err) {
@@ -136,6 +141,12 @@ function stopCapture() {
   if (workletNode) {
     workletNode.disconnect();
     workletNode = null;
+  }
+
+  if (audioPlayback) {
+    audioPlayback.pause();
+    audioPlayback.srcObject = null;
+    audioPlayback = null;
   }
 
   if (audioContext) {

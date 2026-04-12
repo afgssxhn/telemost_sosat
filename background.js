@@ -2,16 +2,56 @@ const DEBUG = false;
 
 let isCapturing = false;
 let offscreenCreated = false;
+let pendingStreamId = null;
+let pendingTabId = null;
+let pendingTabTitle = null;
+
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
 
 chrome.action.onClicked.addListener(async (tab) => {
-  await chrome.sidePanel.open({ tabId: tab.id });
-});
+  if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://'))) {
+    await chrome.sidePanel.open({ tabId: tab.id });
+    broadcastToSidePanel({
+      type: 'tab-ready',
+      tabTitle: null,
+      error: 'Cannot capture Chrome internal pages. Open a regular website.'
+    });
+    return;
+  }
 
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+  try {
+    pendingStreamId = await new Promise((resolve, reject) => {
+      chrome.tabCapture.getMediaStreamId({}, (id) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve(id);
+        }
+      });
+    });
+    pendingTabId = tab.id;
+    pendingTabTitle = tab.title || tab.url || 'Tab ' + tab.id;
+  } catch (e) {
+    if (DEBUG) console.log('Failed to get streamId:', e);
+    pendingStreamId = null;
+    pendingTabId = null;
+    pendingTabTitle = null;
+  }
+
+  await chrome.sidePanel.open({ tabId: tab.id });
+
+  setTimeout(() => {
+    broadcastToSidePanel({
+      type: 'tab-ready',
+      tabTitle: pendingTabTitle,
+      error: pendingStreamId ? null : 'Failed to prepare tab capture. Try clicking the icon again.'
+    });
+  }, 200);
+});
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'start-capture') {
-    handleStartCapture(message.tabId).then(sendResponse).catch((err) => {
+    handleStartCapture().then(sendResponse).catch((err) => {
       sendResponse({ success: false, error: err.message });
     });
     return true;
@@ -20,6 +60,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'stop-capture') {
     handleStopCapture().then(sendResponse).catch((err) => {
       sendResponse({ success: false, error: err.message });
+    });
+    return true;
+  }
+
+  if (message.type === 'get-status') {
+    sendResponse({
+      isCapturing: isCapturing,
+      tabTitle: pendingTabTitle,
+      hasStream: !!pendingStreamId
     });
     return true;
   }
@@ -34,9 +83,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-async function handleStartCapture(tabId) {
+async function handleStartCapture() {
   if (isCapturing) {
     return { success: false, error: 'Already capturing' };
+  }
+
+  if (!pendingStreamId) {
+    return { success: false, error: 'No tab ready. Click the extension icon on the tab you want to capture.' };
   }
 
   const apiKey = await getApiKey();
@@ -44,28 +97,16 @@ async function handleStartCapture(tabId) {
     return { success: false, error: 'no-api-key' };
   }
 
-  const streamId = await new Promise((resolve, reject) => {
-    chrome.tabCapture.getMediaStreamId({ targetTabId: tabId }, (id) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-      } else {
-        resolve(id);
-      }
-    });
-  });
-
-  if (DEBUG) console.log('Got streamId:', streamId);
-
   await ensureOffscreenDocument();
 
   chrome.runtime.sendMessage({
     type: 'offscreen-start',
-    streamId: streamId,
+    streamId: pendingStreamId,
     apiKey: apiKey
   });
 
   isCapturing = true;
-  return { success: true };
+  return { success: true, tabTitle: pendingTabTitle };
 }
 
 async function handleStopCapture() {
@@ -81,7 +122,26 @@ async function handleStopCapture() {
 
   await closeOffscreenDocument();
   isCapturing = false;
-  return { success: true };
+
+  // Re-acquire streamId for the same tab so user can just press Start again
+  if (pendingTabId) {
+    try {
+      pendingStreamId = await new Promise((resolve, reject) => {
+        chrome.tabCapture.getMediaStreamId({}, (id) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve(id);
+          }
+        });
+      });
+    } catch (e) {
+      if (DEBUG) console.log('Failed to re-acquire streamId:', e);
+      pendingStreamId = null;
+    }
+  }
+
+  return { success: true, tabTitle: pendingTabTitle, hasStream: !!pendingStreamId };
 }
 
 async function ensureOffscreenDocument() {
@@ -98,7 +158,7 @@ async function ensureOffscreenDocument() {
 
   await chrome.offscreen.createDocument({
     url: 'offscreen.html',
-    reasons: ['USER_MEDIA'],
+    reasons: ['USER_MEDIA', 'AUDIO_PLAYBACK'],
     justification: 'Capture tab audio and stream to Deepgram for transcription'
   });
 
@@ -118,9 +178,7 @@ async function closeOffscreenDocument() {
 }
 
 function broadcastToSidePanel(message) {
-  chrome.runtime.sendMessage(message).catch(() => {
-    // Side panel might not be open
-  });
+  chrome.runtime.sendMessage(message).catch(() => {});
 }
 
 async function getApiKey() {

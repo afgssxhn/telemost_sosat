@@ -18,7 +18,7 @@ body {
   flex-direction: column;
   height: 100vh;
   padding: 12px;
-  gap: 12px;
+  gap: 10px;
 }
 
 .header {
@@ -39,6 +39,7 @@ body {
   border-radius: 4px;
   background: #333;
   color: #888;
+  white-space: nowrap;
 }
 
 .status.recording {
@@ -55,6 +56,36 @@ body {
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
+}
+
+.tab-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #252525;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.tab-label {
+  color: #888;
+  flex-shrink: 0;
+}
+
+.tab-name {
+  color: #aaa;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-name.ready {
+  color: #6bff6b;
+}
+
+.tab-name.error {
+  color: #ff6b6b;
 }
 
 .controls {
