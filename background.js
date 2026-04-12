@@ -95,10 +95,11 @@ chrome.action.onClicked.addListener(async (tab) => {
 
 function handleAskAI(message) {
   const question = message.question;
-  console.log('[TT:AI] Sending question to native host');
+  const model = message.model;
+  console.log('[TT:AI] Sending question to native host, model:', model);
   chrome.runtime.sendNativeMessage(
     NATIVE_HOST_NAME,
-    { type: 'ask', question: question },
+    { type: 'ask', question: question, model: model },
     (response) => {
       if (chrome.runtime.lastError) {
         console.log('[TT:AI] Native host error:', chrome.runtime.lastError.message);

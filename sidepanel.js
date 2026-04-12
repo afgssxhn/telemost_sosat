@@ -17,6 +17,7 @@ const WARNING_DISPLAY_MS = 5000;
 const PLACEHOLDER_TEXT = 'Click the extension icon on a tab with audio, then press "Start"';
 const AI_BUTTON_TEXT = 'AI';
 const AI_BUTTON_PROCESSING_TEXT = 'Thinking...';
+const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-20250514';
 
 let isRecording = false;
 let finalTranscripts = [];
@@ -58,7 +59,7 @@ btnClear.addEventListener('click', () => {
   updateCopyButtons();
 });
 
-btnAI.addEventListener('click', () => {
+btnAI.addEventListener('click', async () => {
   if (isAiProcessing) return;
 
   const text = finalTranscripts.map(t => t.trim()).filter(Boolean).join(' ');
@@ -74,7 +75,9 @@ btnAI.addEventListener('click', () => {
   aiAnswerTextEl.classList.remove('error');
   aiAnswerEl.style.display = 'block';
 
-  chrome.runtime.sendMessage({ type: 'ask-ai', question: text });
+  const stored = await chrome.storage.local.get('claudeModel');
+  const model = stored.claudeModel || DEFAULT_CLAUDE_MODEL;
+  chrome.runtime.sendMessage({ type: 'ask-ai', question: text, model: model });
 });
 
 btnCopyAI.addEventListener('click', () => {
