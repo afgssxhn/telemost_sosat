@@ -1,3 +1,4 @@
+// --- Transcript tab DOM refs ---
 const btnToggle = document.getElementById('btn-toggle');
 const btnCopyAll = document.getElementById('btn-copy-all');
 const btnCopyLast = document.getElementById('btn-copy-last');
@@ -7,16 +8,60 @@ const transcriptArea = document.getElementById('transcript-area');
 const statusEl = document.getElementById('status');
 const placeholder = document.getElementById('placeholder');
 
+// --- Tab switching DOM refs ---
+const tabBtns = document.querySelectorAll('.tab-btn');
+const tabTranscript = document.getElementById('tab-transcript');
+const tabAssistant = document.getElementById('tab-assistant');
+
+// --- Assistant tab DOM refs ---
+const chatArea = document.getElementById('chat-area');
+const nativeStatusEl = document.getElementById('native-status');
+const autoModeCheckbox = document.getElementById('auto-mode');
+const assistantInput = document.getElementById('assistant-question');
+const btnAsk = document.getElementById('btn-ask');
+const btnClearChat = document.getElementById('btn-clear-chat');
+
+// --- Constants ---
 const MAX_TAB_NAME_LENGTH = 50;
 const COPIED_FEEDBACK_MS = 1500;
 const WARNING_DISPLAY_MS = 5000;
 const PLACEHOLDER_TEXT = 'Click the extension icon on a tab with audio, then press "Start"';
+const NATIVE_PING_TIMEOUT_MS = 3000;
 
+// --- State ---
 let isRecording = false;
 let finalTranscripts = [];
 let interimEl = null;
+let currentTab = 'transcript';
+let isAiProcessing = false;
+let thinkingEl = null;
+let autoModeEnabled = false;
+let pingTimeoutId = null;
 
+// --- Init ---
 initStatus();
+
+// ===== Tab switching =====
+
+tabBtns.forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+function switchTab(tabName) {
+  currentTab = tabName;
+  tabBtns.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+  tabTranscript.style.display = tabName === 'transcript' ? 'flex' : 'none';
+  tabAssistant.style.display = tabName === 'assistant' ? 'flex' : 'none';
+
+  if (tabName === 'assistant') {
+    pingNativeHost();
+    chatArea.scrollTop = chatArea.scrollHeight;
+  }
+}
+
+// ===== Transcript tab — existing controls =====
 
 btnToggle.addEventListener('click', async () => {
   if (isRecording) {
@@ -48,6 +93,29 @@ btnClear.addEventListener('click', () => {
   updateCopyButtons();
 });
 
+// ===== Assistant tab — controls =====
+
+btnAsk.addEventListener('click', () => {
+  const q = assistantInput.value.trim();
+  if (q) askAI(q, 'user');
+});
+
+assistantInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    const q = assistantInput.value.trim();
+    if (q) askAI(q, 'user');
+  }
+});
+
+autoModeCheckbox.addEventListener('change', () => {
+  autoModeEnabled = autoModeCheckbox.checked;
+});
+
+btnClearChat.addEventListener('click', clearChat);
+
+// ===== Message listener =====
+
 chrome.runtime.onMessage.addListener((message) => {
   if (message.target && message.target !== 'sidepanel') return;
 
@@ -77,7 +145,32 @@ chrome.runtime.onMessage.addListener((message) => {
       setTabReady(message.tabTitle);
     }
   }
+
+  // Assistant messages
+  if (message.type === 'ai-response') {
+    hideThinking();
+    addChatBubble('ai', message.text);
+    isAiProcessing = false;
+  }
+
+  if (message.type === 'ai-error') {
+    hideThinking();
+    addChatBubble('error', message.error);
+    isAiProcessing = false;
+  }
+
+  if (message.type === 'native-pong') {
+    clearTimeout(pingTimeoutId);
+    setNativeStatus('connected');
+  }
+
+  if (message.type === 'native-error') {
+    clearTimeout(pingTimeoutId);
+    setNativeStatus('error', message.error);
+  }
 });
+
+// ===== Transcript functions =====
 
 async function initStatus() {
   try {
@@ -142,7 +235,6 @@ async function stopRecording() {
   isRecording = false;
 
   if (response && response.hasStream && response.tabTitle) {
-    // Tab still ready — user can just press Start again
     setTabReady(response.tabTitle);
     setStatus('idle', 'Paused');
   } else {
@@ -173,6 +265,14 @@ function handleTranscript(text, isFinal) {
 
     finalTranscripts.push(text);
     updateCopyButtons();
+
+    // Assistant auto-mode: send final transcripts to AI
+    if (autoModeEnabled && currentTab === 'assistant') {
+      addChatBubble('transcript', text);
+      if (!isAiProcessing) {
+        askAI(text, 'transcript');
+      }
+    }
   } else {
     if (!interimEl) {
       interimEl = document.createElement('div');
@@ -240,3 +340,101 @@ function showNoApiKey() {
 }
 
 updateCopyButtons();
+
+// ===== Assistant functions =====
+
+function askAI(question, source) {
+  if (isAiProcessing || !question) return;
+  isAiProcessing = true;
+
+  if (source === 'user') {
+    addChatBubble('user', question);
+    assistantInput.value = '';
+  }
+
+  showThinking();
+  chrome.runtime.sendMessage({ type: 'ask-ai', question: question });
+}
+
+function addChatBubble(type, text) {
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble chat-' + type;
+  bubble.textContent = text;
+
+  // Action buttons
+  if (type === 'user' || type === 'transcript') {
+    const actions = document.createElement('div');
+    actions.className = 'chat-bubble-actions';
+    const replyBtn = document.createElement('button');
+    replyBtn.className = 'chat-bubble-btn';
+    replyBtn.textContent = 'Ответить';
+    replyBtn.addEventListener('click', () => {
+      askAI(text, 'user');
+    });
+    actions.appendChild(replyBtn);
+    bubble.appendChild(actions);
+  }
+
+  if (type === 'ai') {
+    const actions = document.createElement('div');
+    actions.className = 'chat-bubble-actions';
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'chat-bubble-btn';
+    copyBtn.textContent = 'Копировать';
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(text).then(() => {
+        copyBtn.textContent = '\u2713 Скопировано';
+        copyBtn.classList.add('copied');
+        setTimeout(() => {
+          copyBtn.textContent = 'Копировать';
+          copyBtn.classList.remove('copied');
+        }, COPIED_FEEDBACK_MS);
+      });
+    });
+    actions.appendChild(copyBtn);
+    bubble.appendChild(actions);
+  }
+
+  chatArea.appendChild(bubble);
+  chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function showThinking() {
+  thinkingEl = document.createElement('div');
+  thinkingEl.className = 'chat-bubble chat-thinking';
+  thinkingEl.innerHTML = '<span class="thinking-dots">Думаю<span>.</span><span>.</span><span>.</span></span>';
+  chatArea.appendChild(thinkingEl);
+  chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function hideThinking() {
+  if (thinkingEl) {
+    thinkingEl.remove();
+    thinkingEl = null;
+  }
+}
+
+function setNativeStatus(state, detail) {
+  nativeStatusEl.className = 'native-status ' + state;
+  if (state === 'connected') {
+    nativeStatusEl.textContent = 'Native Host connected';
+  } else if (state === 'error') {
+    nativeStatusEl.textContent = detail || 'Native Host not connected. Run install script and restart Chrome.';
+  } else {
+    nativeStatusEl.textContent = 'Checking...';
+  }
+}
+
+function pingNativeHost() {
+  setNativeStatus('checking');
+  chrome.runtime.sendMessage({ type: 'ping-native' });
+  pingTimeoutId = setTimeout(() => {
+    setNativeStatus('error', 'Native Host not responding. Run install script and restart Chrome.');
+  }, NATIVE_PING_TIMEOUT_MS);
+}
+
+function clearChat() {
+  while (chatArea.firstChild) {
+    chatArea.removeChild(chatArea.firstChild);
+  }
+}

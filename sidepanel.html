@@ -26,8 +26,38 @@
       <button id="btn-clear" class="btn btn-danger" disabled>Clear</button>
     </div>
 
-    <div class="transcript-area" id="transcript-area">
-      <div class="placeholder" id="placeholder">Click the extension icon on a tab with audio, then press "Start"</div>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="transcript">&#128196; Транскрипция</button>
+      <button class="tab-btn" data-tab="assistant">&#129302; Ассистент</button>
+    </div>
+
+    <div class="tab-content" id="tab-transcript">
+      <div class="transcript-area" id="transcript-area">
+        <div class="placeholder" id="placeholder">Click the extension icon on a tab with audio, then press "Start"</div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-assistant" style="display: none">
+      <div class="native-status checking" id="native-status">Checking...</div>
+
+      <div class="chat-area" id="chat-area"></div>
+
+      <div class="auto-mode">
+        <div class="auto-mode-toggle">
+          <input type="checkbox" id="auto-mode">
+          <label for="auto-mode">Авто-режим</label>
+        </div>
+        <span class="auto-mode-hint">Auto-send transcripts to AI</span>
+      </div>
+
+      <div class="assistant-input">
+        <input type="text" id="assistant-question" placeholder="Задайте вопрос...">
+        <button id="btn-ask" class="btn btn-primary">Спросить</button>
+      </div>
+
+      <div class="assistant-controls">
+        <button id="btn-clear-chat" class="btn btn-danger">Очистить чат</button>
+      </div>
     </div>
   </div>
 
