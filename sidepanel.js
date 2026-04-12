@@ -26,12 +26,13 @@ btnToggle.addEventListener('click', async () => {
 });
 
 btnCopyAll.addEventListener('click', () => {
-  copyToClipboard(finalTranscripts.join(' '), btnCopyAll);
+  const text = finalTranscripts.map(t => t.trim()).filter(Boolean).join(' ');
+  copyToClipboard(text, btnCopyAll);
 });
 
 btnCopyLast.addEventListener('click', () => {
   if (finalTranscripts.length > 0) {
-    copyToClipboard(finalTranscripts[finalTranscripts.length - 1], btnCopyLast);
+    copyToClipboard(finalTranscripts[finalTranscripts.length - 1].trim(), btnCopyLast);
   }
 });
 
