@@ -1,6 +1,5 @@
 const DEBUG = false;
 
-let offscreenCreated = false;
 let creatingOffscreen = null;
 
 async function getState() {
@@ -177,7 +176,6 @@ async function ensureOffscreenDocument() {
   });
 
   if (contexts.length > 0) {
-    offscreenCreated = true;
     console.log('[TT] Offscreen document already exists');
     return;
   }
@@ -207,7 +205,6 @@ async function ensureOffscreenDocument() {
     });
 
     await readyPromise;
-    offscreenCreated = true;
     console.log('[TT] Offscreen document created and ready');
   })();
 
@@ -219,15 +216,18 @@ async function ensureOffscreenDocument() {
 }
 
 async function closeOffscreenDocument() {
-  if (!offscreenCreated) return;
+  const contexts = await chrome.runtime.getContexts({
+    contextTypes: ['OFFSCREEN_DOCUMENT']
+  });
+
+  if (contexts.length === 0) return;
 
   try {
     await chrome.offscreen.closeDocument();
+    console.log('[TT] Offscreen document closed');
   } catch (e) {
-    if (DEBUG) console.log('[TT] Error closing offscreen:', e);
+    console.log('[TT] Error closing offscreen:', e.message);
   }
-
-  offscreenCreated = false;
 }
 
 function broadcastToSidePanel(message) {
