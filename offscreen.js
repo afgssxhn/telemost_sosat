@@ -43,7 +43,16 @@ async function startCapture(streamId, apiKey) {
     // Play captured audio back so the user still hears the tab
     audioPlayback = new Audio();
     audioPlayback.srcObject = mediaStream;
-    audioPlayback.play();
+    try {
+      await audioPlayback.play();
+      console.log('[TT] Audio playback started');
+    } catch (e) {
+      console.log('[TT] Audio playback failed:', e.message);
+      chrome.runtime.sendMessage({
+        type: 'capture-warning',
+        warning: 'Tab audio playback failed. Transcription continues without audio.'
+      }).catch(() => {});
+    }
 
     audioContext = new AudioContext({ sampleRate: 16000 });
     const source = audioContext.createMediaStreamSource(mediaStream);

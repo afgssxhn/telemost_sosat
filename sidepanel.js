@@ -52,6 +52,13 @@ chrome.runtime.onMessage.addListener((message) => {
     updateToggleButton();
   }
 
+  if (message.type === 'capture-warning') {
+    setStatus('recording', message.warning);
+    setTimeout(() => {
+      if (isRecording) setStatus('recording', 'Recording...');
+    }, 5000);
+  }
+
   if (message.type === 'tab-ready') {
     if (message.error) {
       tabNameEl.textContent = message.error;
