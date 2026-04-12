@@ -121,30 +121,6 @@ function handleAskAI(message) {
   );
 }
 
-function handlePingNative() {
-  console.log('[TT:AI] Pinging native host');
-  chrome.runtime.sendNativeMessage(
-    NATIVE_HOST_NAME,
-    { type: 'ping' },
-    (response) => {
-      if (chrome.runtime.lastError) {
-        console.log('[TT:AI] Ping failed:', chrome.runtime.lastError.message);
-        broadcastToSidePanel({
-          type: 'native-error',
-          error: chrome.runtime.lastError.message
-        });
-        return;
-      }
-      if (response && response.type === 'pong') {
-        console.log('[TT:AI] Pong received');
-        broadcastToSidePanel({ type: 'native-pong' });
-      } else {
-        broadcastToSidePanel({ type: 'native-error', error: 'Invalid ping response' });
-      }
-    }
-  );
-}
-
 // Message type → handler dispatch map
 const MESSAGE_HANDLERS = {
   'start-capture': (message, sender, sendResponse) => {
@@ -184,11 +160,6 @@ const MESSAGE_HANDLERS = {
 
   'ask-ai': (message, sender, sendResponse) => {
     handleAskAI(message);
-    sendResponse({ success: true });
-  },
-
-  'ping-native': (message, sender, sendResponse) => {
-    handlePingNative();
     sendResponse({ success: true });
   }
 };
