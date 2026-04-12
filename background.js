@@ -1,6 +1,7 @@
 const DEBUG = false;
 
 let offscreenCreated = false;
+let creatingOffscreen = null;
 
 async function getState() {
   const result = await chrome.storage.session.get({
@@ -169,24 +170,52 @@ async function handleStopCapture() {
 }
 
 async function ensureOffscreenDocument() {
-  if (offscreenCreated) return;
+  if (creatingOffscreen) return creatingOffscreen;
 
-  const existingContexts = await chrome.runtime.getContexts({
+  const contexts = await chrome.runtime.getContexts({
     contextTypes: ['OFFSCREEN_DOCUMENT']
   });
 
-  if (existingContexts.length > 0) {
+  if (contexts.length > 0) {
     offscreenCreated = true;
+    console.log('[TT] Offscreen document already exists');
     return;
   }
 
-  await chrome.offscreen.createDocument({
-    url: 'offscreen.html',
-    reasons: ['USER_MEDIA', 'AUDIO_PLAYBACK'],
-    justification: 'Capture tab audio and stream to Deepgram for transcription'
-  });
+  creatingOffscreen = (async () => {
+    const readyPromise = new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        chrome.runtime.onMessage.removeListener(listener);
+        reject(new Error('Offscreen document did not initialize within 5s'));
+      }, 5000);
 
-  offscreenCreated = true;
+      function listener(message) {
+        if (message.type === 'offscreen-ready') {
+          clearTimeout(timeout);
+          chrome.runtime.onMessage.removeListener(listener);
+          resolve();
+        }
+      }
+
+      chrome.runtime.onMessage.addListener(listener);
+    });
+
+    await chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['USER_MEDIA', 'AUDIO_PLAYBACK'],
+      justification: 'Capture tab audio and stream to Deepgram for transcription'
+    });
+
+    await readyPromise;
+    offscreenCreated = true;
+    console.log('[TT] Offscreen document created and ready');
+  })();
+
+  try {
+    await creatingOffscreen;
+  } finally {
+    creatingOffscreen = null;
+  }
 }
 
 async function closeOffscreenDocument() {

@@ -20,6 +20,10 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 });
 
+// Signal to background that the offscreen document is loaded and ready
+chrome.runtime.sendMessage({ type: 'offscreen-ready' }).catch(() => {});
+console.log('[TT] Offscreen document ready');
+
 async function startCapture(streamId, apiKey) {
   if (isRunning) return;
   isRunning = true;
