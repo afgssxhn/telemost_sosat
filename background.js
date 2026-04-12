@@ -1,10 +1,20 @@
 const DEBUG = false;
 
-let isCapturing = false;
 let offscreenCreated = false;
-let pendingStreamId = null;
-let pendingTabId = null;
-let pendingTabTitle = null;
+
+async function getState() {
+  const result = await chrome.storage.session.get({
+    isCapturing: false,
+    pendingStreamId: null,
+    pendingTabId: null,
+    pendingTabTitle: null
+  });
+  return result;
+}
+
+async function setState(patch) {
+  await chrome.storage.session.set(patch);
+}
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
 
@@ -19,8 +29,11 @@ chrome.action.onClicked.addListener(async (tab) => {
     return;
   }
 
+  let streamId = null;
+  const tabTitle = tab.title || tab.url || 'Tab ' + tab.id;
+
   try {
-    pendingStreamId = await new Promise((resolve, reject) => {
+    streamId = await new Promise((resolve, reject) => {
       chrome.tabCapture.getMediaStreamId({}, (id) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
@@ -29,22 +42,24 @@ chrome.action.onClicked.addListener(async (tab) => {
         }
       });
     });
-    pendingTabId = tab.id;
-    pendingTabTitle = tab.title || tab.url || 'Tab ' + tab.id;
   } catch (e) {
-    if (DEBUG) console.log('Failed to get streamId:', e);
-    pendingStreamId = null;
-    pendingTabId = null;
-    pendingTabTitle = null;
+    console.log('[TT] Failed to get streamId:', e.message);
   }
+
+  await setState({
+    pendingStreamId: streamId,
+    pendingTabId: tab.id,
+    pendingTabTitle: tabTitle
+  });
 
   await chrome.sidePanel.open({ tabId: tab.id });
 
-  setTimeout(() => {
+  setTimeout(async () => {
+    const state = await getState();
     broadcastToSidePanel({
       type: 'tab-ready',
-      tabTitle: pendingTabTitle,
-      error: pendingStreamId ? null : 'Failed to prepare tab capture. Try clicking the icon again.'
+      tabTitle: state.pendingTabTitle,
+      error: state.pendingStreamId ? null : 'Failed to prepare tab capture. Try clicking the icon again.'
     });
   }, 200);
 });
@@ -65,10 +80,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'get-status') {
-    sendResponse({
-      isCapturing: isCapturing,
-      tabTitle: pendingTabTitle,
-      hasStream: !!pendingStreamId
+    getState().then((state) => {
+      sendResponse({
+        isCapturing: state.isCapturing,
+        tabTitle: state.pendingTabTitle,
+        hasStream: !!state.pendingStreamId
+      });
     });
     return true;
   }
@@ -79,16 +96,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'capture-error') {
     broadcastToSidePanel(message);
-    isCapturing = false;
+    setState({ isCapturing: false });
   }
 });
 
 async function handleStartCapture() {
-  if (isCapturing) {
+  const state = await getState();
+
+  if (state.isCapturing) {
     return { success: false, error: 'Already capturing' };
   }
 
-  if (!pendingStreamId) {
+  if (!state.pendingStreamId) {
     return { success: false, error: 'No tab ready. Click the extension icon on the tab you want to capture.' };
   }
 
@@ -101,32 +120,37 @@ async function handleStartCapture() {
 
   chrome.runtime.sendMessage({
     type: 'offscreen-start',
-    streamId: pendingStreamId,
+    streamId: state.pendingStreamId,
     apiKey: apiKey
   });
 
-  isCapturing = true;
-  return { success: true, tabTitle: pendingTabTitle };
+  await setState({ isCapturing: true });
+  console.log('[TT] Capture started');
+  return { success: true, tabTitle: state.pendingTabTitle };
 }
 
 async function handleStopCapture() {
-  if (!isCapturing) {
+  const state = await getState();
+
+  if (!state.isCapturing) {
     return { success: true };
   }
 
   try {
     chrome.runtime.sendMessage({ type: 'offscreen-stop' });
   } catch (e) {
-    if (DEBUG) console.log('Error sending stop to offscreen:', e);
+    console.log('[TT] Error sending stop to offscreen:', e.message);
   }
 
   await closeOffscreenDocument();
-  isCapturing = false;
+  await setState({ isCapturing: false });
+  console.log('[TT] Capture stopped');
 
   // Re-acquire streamId for the same tab so user can just press Start again
-  if (pendingTabId) {
+  let newStreamId = null;
+  if (state.pendingTabId) {
     try {
-      pendingStreamId = await new Promise((resolve, reject) => {
+      newStreamId = await new Promise((resolve, reject) => {
         chrome.tabCapture.getMediaStreamId({}, (id) => {
           if (chrome.runtime.lastError) {
             reject(new Error(chrome.runtime.lastError.message));
@@ -136,12 +160,12 @@ async function handleStopCapture() {
         });
       });
     } catch (e) {
-      if (DEBUG) console.log('Failed to re-acquire streamId:', e);
-      pendingStreamId = null;
+      if (DEBUG) console.log('[TT] Failed to re-acquire streamId:', e.message);
     }
   }
 
-  return { success: true, tabTitle: pendingTabTitle, hasStream: !!pendingStreamId };
+  await setState({ pendingStreamId: newStreamId });
+  return { success: true, tabTitle: state.pendingTabTitle, hasStream: !!newStreamId };
 }
 
 async function ensureOffscreenDocument() {
@@ -171,7 +195,7 @@ async function closeOffscreenDocument() {
   try {
     await chrome.offscreen.closeDocument();
   } catch (e) {
-    if (DEBUG) console.log('Error closing offscreen:', e);
+    if (DEBUG) console.log('[TT] Error closing offscreen:', e);
   }
 
   offscreenCreated = false;
