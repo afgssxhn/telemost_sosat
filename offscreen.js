@@ -101,13 +101,26 @@ function connectWebSocket() {
   websocket = new WebSocket(url, ['token', currentApiKey]);
 
   websocket.onopen = () => {
-    if (DEBUG) console.log('Deepgram WebSocket connected');
+    console.log('[TT] Deepgram WebSocket connected');
     reconnectAttempts = 0;
   };
 
   websocket.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
+
+      // Handle Deepgram error responses
+      if (data.type === 'Error') {
+        console.log('[TT] Deepgram error:', data.error_code, data.error_message);
+        chrome.runtime.sendMessage({
+          type: 'capture-error',
+          target: 'background',
+          error: 'Deepgram: ' + (data.error_message || data.error_code || 'Unknown error')
+        }).catch(() => {});
+        stopCapture();
+        return;
+      }
+
       const alt = data?.channel?.alternatives?.[0];
       const transcript = alt?.transcript;
 
@@ -123,31 +136,32 @@ function connectWebSocket() {
           text: transcript,
           isFinal: data.is_final === true,
           speaker: speaker
-        });
+        }).catch(() => {});
       }
     } catch (err) {
-      if (DEBUG) console.log('Parse error:', err);
+      console.log('[TT] Parse error:', err);
     }
   };
 
   websocket.onerror = (err) => {
-    if (DEBUG) console.log('WebSocket error:', err);
+    console.log('[TT] WebSocket error:', err);
   };
 
   websocket.onclose = (event) => {
-    if (DEBUG) console.log('WebSocket closed:', event.code, event.reason);
+    console.log('[TT] WebSocket closed: code=' + event.code, 'reason=' + event.reason);
 
     if (isRunning && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
       reconnectAttempts++;
       const delay = Math.pow(2, reconnectAttempts) * RECONNECT_BACKOFF_BASE_MS;
-      if (DEBUG) console.log('Reconnecting in', delay, 'ms, attempt', reconnectAttempts);
+      console.log('[TT] Reconnecting in', delay, 'ms, attempt', reconnectAttempts);
       setTimeout(() => connectWebSocket(), delay);
     } else if (isRunning && reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      const reason = event.reason ? ': ' + event.reason : '';
       chrome.runtime.sendMessage({
         type: 'capture-error',
         target: 'background',
-        error: 'WebSocket connection lost after ' + MAX_RECONNECT_ATTEMPTS + ' reconnect attempts'
-      });
+        error: 'Deepgram connection lost (code ' + event.code + reason + ')'
+      }).catch(() => {});
     }
   };
 }
