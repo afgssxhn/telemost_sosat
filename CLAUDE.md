@@ -5,8 +5,8 @@ Chrome extension (Manifest V3) for real-time Russian speech transcription from b
 ## Architecture
 
 - `background.js` — Service worker. State persisted in `chrome.storage.session` via `getState()`/`setState()` helpers. Coordinates offscreen doc, side panel, and native messaging host.
-- `offscreen.js` — Captures tab audio (AudioWorklet + WebSocket to Deepgram). Sends `offscreen-ready` on load. All outgoing messages include `target: 'background'`.
-- `sidepanel.js` — UI. AI button sends all transcripts to Claude, answer displays inline. Filters messages by `target: 'sidepanel'`.
+- `offscreen.js` — Captures tab audio (AudioWorklet + WebSocket to Deepgram). Sends `offscreen-ready` on load. All outgoing messages include `target: 'background'`. Deepgram params: `smart_format=true`, `endpointing=300`, `diarize=true`. Speaker extracted from `words[0].speaker`.
+- `sidepanel.js` — UI. AI button sends all transcripts to Claude, answer displays inline. Filters messages by `target: 'sidepanel'`. `finalTranscripts` is array of `{ text, speaker }` objects. Speaker labels shown on speaker change with 4 cycling colors (`SPEAKER_COLORS`).
 - `audio-processor.js` — AudioWorklet: ring buffer on Float32Array with read/write pointers for Float32 -> PCM Int16 conversion.
 - `utils.js` — Shared utilities (`DEBUG` flag, `getApiKey()`). Loaded via `importScripts` in background.js, `<script>` in HTML pages.
 - `common.css` — Shared CSS reset, body theme, `.btn` base styles. Linked before page-specific CSS.
@@ -59,3 +59,13 @@ Chrome extension (Manifest V3) for real-time Russian speech transcription from b
 - Model selection: options page stores `claudeModel` in `chrome.storage.local`, sidepanel reads it and passes via `ask-ai` → background → host.py `--model` flag. Default: `claude-sonnet-4-20250514`
 - Windows UTF-8 fix: `subprocess.run()` in host.py uses explicit `encoding='utf-8'`, `errors='replace'`, and `PYTHONIOENCODING=utf-8` env var to prevent cp1251/cp866 garbling
 - Logging prefix: `[TT:AI]` for AI operations, `[TT:HOST]` for native host
+
+## Transcription Improvements (2026-04-13)
+
+- Deepgram `smart_format=true` replaces `punctuate=true`: adds paragraphs, number formatting for Russian
+- `endpointing=300` (was default 10ms): produces longer, more coherent phrases
+- `diarize=true`: speaker identification per word, speaker extracted from `words[0].speaker`
+- Speaker labels ("Спикер 1", "Спикер 2") shown on speaker change only, with 4 cycling colors: `#4fc3f7`, `#81c784`, `#ffb74d`, `#e57373`
+- `finalTranscripts` changed from `string[]` to `{ text, speaker }[]`
+- Copy all includes speaker labels with line breaks; Copy last / AI button use text only
+- Backward compatible: if `speaker` is null (no diarization data), no labels shown
