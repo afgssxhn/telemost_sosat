@@ -7,6 +7,7 @@ let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 3;
 const SAMPLE_RATE = 16000;
 const RECONNECT_BACKOFF_BASE_MS = 1000;
+const ENDPOINTING_MS = 300;
 let currentApiKey = null;
 let isRunning = false;
 
@@ -89,8 +90,10 @@ function connectWebSocket() {
   const url = 'wss://api.deepgram.com/v1/listen'
     + '?language=ru'
     + '&model=nova-3'
-    + '&punctuate=true'
+    + '&smart_format=true'
     + '&interim_results=true'
+    + '&endpointing=' + ENDPOINTING_MS
+    + '&diarize=true'
     + '&encoding=linear16'
     + '&sample_rate=' + SAMPLE_RATE
     + '&channels=1';
@@ -105,14 +108,21 @@ function connectWebSocket() {
   websocket.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      const transcript = data?.channel?.alternatives?.[0]?.transcript;
+      const alt = data?.channel?.alternatives?.[0];
+      const transcript = alt?.transcript;
 
       if (transcript) {
+        const words = alt?.words;
+        const speaker = (words && words.length > 0 && words[0].speaker != null)
+          ? words[0].speaker
+          : null;
+
         chrome.runtime.sendMessage({
           type: 'transcript',
           target: 'background',
           text: transcript,
-          isFinal: data.is_final === true
+          isFinal: data.is_final === true,
+          speaker: speaker
         });
       }
     } catch (err) {
