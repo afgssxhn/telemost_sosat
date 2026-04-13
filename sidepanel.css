@@ -182,6 +182,17 @@ body {
   font-style: italic;
 }
 
+.speaker-label {
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 12px;
+  margin-bottom: 2px;
+}
+
+.speaker-label:first-child {
+  margin-top: 0;
+}
+
 .no-api-key {
   color: #ff6b6b;
   text-align: center;

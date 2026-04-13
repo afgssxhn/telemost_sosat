@@ -18,11 +18,13 @@ const PLACEHOLDER_TEXT = 'Click the extension icon on a tab with audio, then pre
 const AI_BUTTON_TEXT = 'AI';
 const AI_BUTTON_PROCESSING_TEXT = 'Thinking...';
 const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+const SPEAKER_COLORS = ['#4fc3f7', '#81c784', '#ffb74d', '#e57373'];
 
 let isRecording = false;
 let finalTranscripts = [];
 let interimEl = null;
 let isAiProcessing = false;
+let lastDisplayedSpeaker = null;
 
 initStatus();
 
@@ -37,18 +39,32 @@ btnToggle.addEventListener('click', async () => {
 });
 
 btnCopyAll.addEventListener('click', () => {
-  const text = finalTranscripts.map(t => t.trim()).filter(Boolean).join(' ');
-  copyToClipboard(text, btnCopyAll);
+  let result = '';
+  let copySpeaker = null;
+  for (const entry of finalTranscripts) {
+    const text = entry.text.trim();
+    if (!text) continue;
+    if (entry.speaker != null && entry.speaker !== copySpeaker) {
+      copySpeaker = entry.speaker;
+      if (result) result += '\n\n';
+      result += 'Спикер ' + (entry.speaker + 1) + ':\n';
+    } else if (result && !result.endsWith('\n')) {
+      result += ' ';
+    }
+    result += text;
+  }
+  copyToClipboard(result, btnCopyAll);
 });
 
 btnCopyLast.addEventListener('click', () => {
   if (finalTranscripts.length > 0) {
-    copyToClipboard(finalTranscripts[finalTranscripts.length - 1].trim(), btnCopyLast);
+    copyToClipboard(finalTranscripts[finalTranscripts.length - 1].text.trim(), btnCopyLast);
   }
 });
 
 btnClear.addEventListener('click', () => {
   finalTranscripts = [];
+  lastDisplayedSpeaker = null;
   while (transcriptArea.firstChild) {
     transcriptArea.removeChild(transcriptArea.firstChild);
   }
@@ -62,7 +78,7 @@ btnClear.addEventListener('click', () => {
 btnAI.addEventListener('click', async () => {
   if (isAiProcessing) return;
 
-  const text = finalTranscripts.map(t => t.trim()).filter(Boolean).join(' ');
+  const text = finalTranscripts.map(t => t.text.trim()).filter(Boolean).join(' ');
   if (!text) return;
 
   isAiProcessing = true;
@@ -99,7 +115,7 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message.target && message.target !== 'sidepanel') return;
 
   if (message.type === 'transcript') {
-    handleTranscript(message.text, message.isFinal);
+    handleTranscript(message.text, message.isFinal, message.speaker);
   }
 
   if (message.type === 'capture-error') {
@@ -215,7 +231,7 @@ async function stopRecording() {
   updateToggleButton();
 }
 
-function handleTranscript(text, isFinal) {
+function handleTranscript(text, isFinal, speaker) {
   if (placeholder.style.display !== 'none') {
     placeholder.style.display = 'none';
   }
@@ -226,12 +242,22 @@ function handleTranscript(text, isFinal) {
       interimEl = null;
     }
 
+    // Show speaker label on speaker change
+    if (speaker != null && speaker !== lastDisplayedSpeaker) {
+      const labelEl = document.createElement('div');
+      labelEl.className = 'speaker-label';
+      labelEl.style.color = SPEAKER_COLORS[speaker % SPEAKER_COLORS.length];
+      labelEl.textContent = 'Спикер ' + (speaker + 1);
+      transcriptArea.appendChild(labelEl);
+      lastDisplayedSpeaker = speaker;
+    }
+
     const el = document.createElement('div');
     el.className = 'transcript-final';
     el.textContent = text;
     transcriptArea.appendChild(el);
 
-    finalTranscripts.push(text);
+    finalTranscripts.push({ text: text, speaker: speaker != null ? speaker : null });
     updateCopyButtons();
   } else {
     if (!interimEl) {
